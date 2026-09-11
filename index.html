@@ -45,13 +45,23 @@
       return `${year}-${month}-${day}`;
     };
 
-    // ==================== Supabase ====================
+    // ==================== Supabase (Anon Key 本身設計即為前端公開使用) ====================
     const SUPABASE_URL = 'https://pyfpuszqfuwmywwdwrua.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_Gw5-YC_DecCyuYipN-L46w_9gZGCgZW';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ==================== Gemini API Key（已寫死） ====================
-    const HARDCODED_API_KEY = "AQ.Ab8RN6JB8sCVxiHIkUm6_pYBml4q9-CbaUkVlyWPCvVM3ESytQ";
+    // ==================== Gemini API Key 動態讀取邏輯 ====================
+    const getGeminiKey = () => {
+      let key = localStorage.getItem('cat_app_gemini_key');
+      if (!key) {
+        key = prompt("🐾 喵～請輸入您的 Gemini API Key（Key 僅會保存在您的機器中，不會上傳）：");
+        if (key && key.trim()) {
+          key = key.trim();
+          localStorage.setItem('cat_app_gemini_key', key);
+        }
+      }
+      return key;
+    };
 
     const dbStore = {
       async saveMeal(meal) {
@@ -153,6 +163,11 @@
     };
 
     const analyzeFoodWithAI = async (base64Image) => {
+      const apiKey = getGeminiKey();
+      if (!apiKey) {
+        throw new Error("沒有輸入 API Key 喵！無法啟用 AI 拍照辨識。");
+      }
+
       const base64Data = base64Image.split(',')[1] || base64Image;
 
       const prompt = `你是一位超可愛又專業的「喵星人營養師 🐾」。請詳細分析這張圖片中的食物與飲料。
@@ -183,20 +198,21 @@
         generationConfig: { responseMimeType: "application/json" }
       };
 
-      // 使用 Header 方式傳送新格式的 AQ. Key
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${apiKey}`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-goog-api-key': HARDCODED_API_KEY
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      if (response.status === 401 || response.status === 400) {
+        localStorage.removeItem('cat_app_gemini_key');
+        throw new Error(`API Key 無效或已過期 (${response.status})，請重新輸入喵！`);
+      }
+
       if (!response.ok) {
-        throw new Error(`AI 辨識服務回應異常 (${response.status})。請檢查 API Key 或網路連線喵。`);
+        throw new Error(`AI 辨識服務回應異常 (${response.status})。請檢查網路連線喵。`);
       }
 
       const result = await response.json();
@@ -433,6 +449,11 @@
           console.error(err);
           setErrorMsg("儲存設定失敗喵");
         }
+      };
+
+      const handleResetKey = () => {
+        localStorage.removeItem('cat_app_gemini_key');
+        showToast("已清除 API Key，下次使用拍照時將會重新詢問 🐾");
       };
 
       const handleDateChange = (offsetDays) => {
@@ -696,6 +717,11 @@
                         </div>
                       </div>
                     </div>
+                  </div>
+                  <div className="border-t border-amber-100 pt-3">
+                    <h4 className="text-xs font-black text-rose-600 mb-2 flex items-center gap-1"><span>🔑</span> API Key 重設</h4>
+                    <p className="text-[11px] text-slate-500 mb-2">如果輸入錯誤或更換了 API Key，點擊下方可重置。</p>
+                    <button type="button" onClick={handleResetKey} className="w-full py-2 bg-rose-50 text-rose-600 font-bold rounded-xl text-xs border border-rose-200 hover:bg-rose-100">清除並重設 Gemini API Key 🐾</button>
                   </div>
                   <div className="pt-3 flex space-x-3">
                     <button type="button" onClick={() => setIsSettingsOpen(false)} className="w-1/2 py-2.5 bg-amber-100 text-amber-900 font-extrabold rounded-2xl text-xs">取消</button>
