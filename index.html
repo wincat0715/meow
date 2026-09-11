@@ -45,14 +45,13 @@
       return `${year}-${month}-${day}`;
     };
 
-    // ==================== Supabase 設定 ====================
+    // ==================== Supabase ====================
     const SUPABASE_URL = 'https://pyfpuszqfuwmywwdwrua.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_Gw5-YC_DecCyuYipN-L46w_9gZGCgZW';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ==================== ★★★ 在這裡貼上你的 Gemini API Key ★★★ ====================
-    const HARDCODED_API_KEY = "AQ.Ab8RN6JudmlegDOVFAKUQRsnFEvD3TVlG3r2lZHVzxufQZRWVA";   // ←←← 改這裡！！！
-    // =================================================================================
+    // ==================== Gemini API Key（已寫死） ====================
+    const HARDCODED_API_KEY = "AQ.Ab8RN6JudmlegDOVFAKUQRsnFEvD3TVIG3r2lZHVzxufQZRWVA";
 
     const dbStore = {
       async saveMeal(meal) {
@@ -155,6 +154,7 @@
 
     const analyzeFoodWithAI = async (base64Image) => {
       const base64Data = base64Image.split(',')[1] || base64Image;
+
       const prompt = `你是一位超可愛又專業的「喵星人營養師 🐾」。請詳細分析這張圖片中的食物與飲料。
 請嚴格以 JSON 格式回應，不要包含任何額外的 Markdown 格式說明或導言，格式如下：
 {
@@ -183,12 +183,15 @@
         generationConfig: { responseMimeType: "application/json" }
       };
 
-      // 使用寫死的 API Key + 穩定模型
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${HARDCODED_API_KEY}`;
+      // 使用 Header 方式傳送新格式的 AQ. Key
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-goog-api-key': HARDCODED_API_KEY
+        },
         body: JSON.stringify(payload)
       });
 
@@ -198,7 +201,10 @@
 
       const result = await response.json();
       const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) throw new Error('喵～本喵看不到照片裡的食物，請換張清楚的照片或手動輸入喵！');
+
+      if (!rawText) {
+        throw new Error('喵～本喵看不到照片裡的食物，請換張清楚的照片或手動輸入喵！');
+      }
 
       let cleanJsonStr = rawText.trim();
       if (cleanJsonStr.startsWith('```')) {
@@ -228,8 +234,12 @@
         super(props);
         this.state = { hasError: false, error: null };
       }
-      static getDerivedStateFromError(error) { return { hasError: true, error }; }
-      componentDidCatch(error, errorInfo) { console.error("ErrorBoundary:", error, errorInfo); }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, errorInfo) {
+        console.error("ErrorBoundary:", error, errorInfo);
+      }
       render() {
         if (this.state.hasError) {
           return (
@@ -266,7 +276,10 @@
         image: null, aiAdvice: ''
       });
 
-      const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 3500); };
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(null), 3500);
+      };
 
       const loadDayData = React.useCallback(async (dateStr) => {
         try {
@@ -274,8 +287,9 @@
           const dayMeals = await dbStore.getMealsByDate(dateStr);
           setMeals(dayMeals);
           const storedGoal = await dbStore.getGoal(dateStr);
-          if (storedGoal) setGoal(storedGoal);
-          else {
+          if (storedGoal) {
+            setGoal(storedGoal);
+          } else {
             const savedDefaultGoal = await dbStore.getSetting('default_goal');
             if (savedDefaultGoal) setGoal(savedDefaultGoal);
           }
@@ -285,7 +299,9 @@
         }
       }, []);
 
-      React.useEffect(() => { loadDayData(selectedDate); }, [selectedDate, loadDayData]);
+      React.useEffect(() => {
+        loadDayData(selectedDate);
+      }, [selectedDate, loadDayData]);
 
       const dailyTotals = React.useMemo(() => {
         return meals.reduce((acc, meal) => {
@@ -348,31 +364,47 @@
           await dbStore.deleteMeal(id);
           setMeals(prev => prev.filter(m => m.id !== id));
           showToast("已將這筆紀錄遞給貓貓收好囉 🐾");
-        } catch (err) { setErrorMsg("刪除失敗，請重試喵"); }
+        } catch (err) {
+          setErrorMsg("刪除失敗，請重試喵");
+        }
       };
 
       const handleOpenEdit = (meal) => {
         setEditingMeal(meal);
         setFormData({
-          mealName: meal.mealName || '', mealType: meal.mealType || '午餐',
-          calories: meal.calories || 0, protein: meal.protein || 0, carbs: meal.carbs || 0, fat: meal.fat || 0,
-          time: meal.time || '12:00', image: meal.image || null, aiAdvice: meal.aiAdvice || ''
+          mealName: meal.mealName || '',
+          mealType: meal.mealType || '午餐',
+          calories: meal.calories || 0,
+          protein: meal.protein || 0,
+          carbs: meal.carbs || 0,
+          fat: meal.fat || 0,
+          time: meal.time || '12:00',
+          image: meal.image || null,
+          aiAdvice: meal.aiAdvice || ''
         });
       };
 
       const handleSaveMealForm = async (e) => {
         e.preventDefault();
-        if (!formData.mealName.trim()) { setErrorMsg("請填寫餐點名稱喵～"); return; }
+        if (!formData.mealName.trim()) {
+          setErrorMsg("請填寫餐點名稱喵～");
+          return;
+        }
         try {
           const updatedMeal = {
             id: editingMeal ? editingMeal.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
-            date: selectedDate, time: formData.time, mealType: formData.mealType,
+            date: selectedDate,
+            time: formData.time,
+            mealType: formData.mealType,
             mealName: formData.mealName.trim(),
-            calories: safeNum(formData.calories), protein: safeNum(formData.protein),
-            carbs: safeNum(formData.carbs), fat: safeNum(formData.fat),
+            calories: safeNum(formData.calories),
+            protein: safeNum(formData.protein),
+            carbs: safeNum(formData.carbs),
+            fat: safeNum(formData.fat),
             healthScore: editingMeal ? (editingMeal.healthScore || 80) : 80,
             aiAdvice: formData.aiAdvice || "貓貓手動記錄的營養大餐喵 🐾",
-            image: formData.image || null, items: editingMeal ? (editingMeal.items || []) : []
+            image: formData.image || null,
+            items: editingMeal ? (editingMeal.items || []) : []
           };
           await dbStore.saveMeal(updatedMeal);
           if (editingMeal) {
@@ -491,8 +523,11 @@
             </label>
             <button onClick={() => {
               setEditingMeal(null);
-              setFormData({ mealName: '', mealType: '午餐', calories: 400, protein: 20, carbs: 50, fat: 15,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), image: null, aiAdvice: '' });
+              setFormData({
+                mealName: '', mealType: '午餐', calories: 400, protein: 20, carbs: 50, fat: 15,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                image: null, aiAdvice: ''
+              });
               setIsAddingModalOpen(true);
             }} className="flex flex-col items-center justify-center p-4 bg-white hover:bg-amber-50/80 text-amber-900 border border-amber-200 rounded-3xl font-extrabold transition shadow-sm active:scale-95">
               <span className="text-2xl mb-1">✍️</span>
@@ -512,6 +547,7 @@
               <span className="flex items-center gap-1">🐟 飲食紀錄 <span className="bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full text-[10px]">{meals.length} 筆</span></span>
               <span className="text-amber-700 font-bold">{selectedDate}</span>
             </h2>
+
             {meals.length === 0 ? (
               <div className="text-center py-10 bg-white/80 rounded-3xl border-2 border-dashed border-amber-200 p-6">
                 <div className="text-5xl mb-2 animate-cat-float">🐱💤</div>
@@ -562,7 +598,9 @@
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white border-2 border-amber-200 rounded-3xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="flex justify-between items-center mb-4 border-b border-amber-100 pb-2">
-                  <h3 className="text-base font-black text-amber-950 flex items-center gap-1.5"><span>🐾</span><span>{editingMeal ? '修改餐點紀錄' : '手動新增飲食紀錄'}</span></h3>
+                  <h3 className="text-base font-black text-amber-950 flex items-center gap-1.5">
+                    <span>🐾</span><span>{editingMeal ? '修改餐點紀錄' : '手動新增飲食紀錄'}</span>
+                  </h3>
                   <button onClick={() => { setIsAddingModalOpen(false); setEditingMeal(null); }} className="text-amber-700 hover:text-amber-900 font-bold text-lg">✕</button>
                 </div>
                 <form onSubmit={handleSaveMealForm} className="space-y-3.5">
@@ -577,7 +615,11 @@
                       <label className="block text-xs font-bold text-amber-900 mb-1">餐點類別</label>
                       <select value={formData.mealType} onChange={e => setFormData({...formData, mealType: e.target.value})}
                         className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500">
-                        <option value="早餐">早餐 🥐</option><option value="午餐">午餐 🍱</option><option value="下午茶">下午茶 🍰</option><option value="晚餐">晚餐 🍲</option><option value="宵夜">宵夜 🐟</option>
+                        <option value="早餐">早餐 🥐</option>
+                        <option value="午餐">午餐 🍱</option>
+                        <option value="下午茶">下午茶 🍰</option>
+                        <option value="晚餐">晚餐 🍲</option>
+                        <option value="宵夜">宵夜 🐟</option>
                       </select>
                     </div>
                     <div>
@@ -588,7 +630,8 @@
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-amber-900 mb-1">熱量 (kcal)</label>
-                    <input type="number" min="0" required value={formData.calories} onChange={e => setFormData({...formData, calories: safeNum(e.target.value)})}
+                    <input type="number" min="0" required value={formData.calories}
+                      onChange={e => setFormData({...formData, calories: safeNum(e.target.value)})}
                       className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:border-emerald-500" />
                   </div>
                   <div className="grid grid-cols-3 gap-2">
