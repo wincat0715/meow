@@ -11,7 +11,9 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <!-- Babel for React JSX Compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Google Fonts: Zen Maru Gothic & Nunito for cute rounded fonts -->
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
       body { 
@@ -46,13 +48,13 @@
 
   <script type="text/babel">
 
-    // 安全數字轉化，防止 NaN, undefined, null
+    // 安全數字轉化
     const safeNum = (val, fallback = 0) => {
       const num = Number(val);
       return isNaN(num) || num === null || num === undefined ? fallback : Math.round(num);
     };
 
-    // 取得使用者當地區域日期的 ISO 字串 (YYYY-MM-DD)
+    // 取得當地日期 YYYY-MM-DD
     const getLocalDateString = (dateObj = new Date()) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -60,102 +62,158 @@
       return `${year}-${month}-${day}`;
     };
 
-    // IndexedDB 數據庫操作庫，防止 localStorage 5MB 限制導致照片遺失
-    const DB_NAME = 'ProdCalorieTrackerDB';
-    const DB_VERSION = 1;
+    // ==================== Supabase 設定 ====================
+    const SUPABASE_URL = 'https://pyfpuszqfuwmywwdwrua.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Gw5-YC_DecCyuYipN-L46w_9gZGCgZW';
 
-    const initDB = () => {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = (e) => reject('IndexedDB 開啟失敗: ' + e.target.error);
-        request.onsuccess = (e) => resolve(e.target.result);
-        request.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('meals')) {
-            const mealStore = db.createObjectStore('meals', { keyPath: 'id' });
-            mealStore.createIndex('date', 'date', { unique: false });
-          }
-          if (!db.objectStoreNames.contains('goals')) {
-            db.createObjectStore('goals', { keyPath: 'date' });
-          }
-          if (!db.objectStoreNames.contains('settings')) {
-            db.createObjectStore('settings', { keyPath: 'key' });
-          }
-        };
-      });
-    };
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ==================== 資料庫操作 ====================
     const dbStore = {
       async saveMeal(meal) {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('meals', 'readwrite');
-          const store = tx.objectStore('meals');
-          const req = store.put(meal);
-          req.onsuccess = () => resolve(meal);
-          req.onerror = () => reject('儲存餐點失敗');
-        });
+        const { data, error } = await supabase
+          .from('meals')
+          .upsert({
+            id: meal.id,
+            date: meal.date,
+            time: meal.time,
+            meal_type: meal.mealType,
+            meal_name: meal.mealName,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fat: meal.fat,
+            health_score: meal.healthScore || 80,
+            ai_advice: meal.aiAdvice || '',
+            image: meal.image || null,
+            items: meal.items || []
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
       },
+
       async getMealsByDate(date) {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('meals', 'readonly');
-          const store = tx.objectStore('meals');
-          const index = store.index('date');
-          const req = index.getAll(date);
-          req.onsuccess = () => resolve(req.result || []);
-          req.onerror = () => reject('讀取餐點失敗');
-        });
+        const { data, error } = await supabase
+          .from('meals')
+          .select('*')
+          .eq('date', date)
+          .order('time', { ascending: false });
+
+        if (error) throw error;
+
+        return (data || []).map(row => ({
+          id: row.id,
+          date: row.date,
+          time: row.time,
+          mealType: row.meal_type,
+          mealName: row.meal_name,
+          calories: row.calories,
+          protein: row.protein,
+          carbs: row.carbs,
+          fat: row.fat,
+          healthScore: row.health_score,
+          aiAdvice: row.ai_advice,
+          image: row.image,
+          items: row.items || []
+        }));
       },
+
       async deleteMeal(id) {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('meals', 'readwrite');
-          const store = tx.objectStore('meals');
-          const req = store.delete(id);
-          req.onsuccess = () => resolve(true);
-          req.onerror = () => reject('刪除餐點失敗');
-        });
+        const { error } = await supabase
+          .from('meals')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        return true;
       },
+
       async getGoal(date) {
-        const db = await initDB();
-        return new Promise((resolve) => {
-          const tx = db.transaction('goals', 'readonly');
-          const store = tx.objectStore('goals');
-          const req = store.get(date);
-          req.onsuccess = () => resolve(req.result || null);
-          req.onerror = () => resolve(null);
-        });
+        const { data, error } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('date', date)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return null;
+
+        return {
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat
+        };
       },
+
       async saveGoal(goalObj) {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('goals', 'readwrite');
-          const store = tx.objectStore('goals');
-          const req = store.put(goalObj);
-          req.onsuccess = () => resolve(goalObj);
-          req.onerror = () => reject('儲存目標失敗');
-        });
+        // 先查有沒有這天的目標
+        const { data: existing } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('date', goalObj.date)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('goals')
+            .update({
+              calories: goalObj.calories,
+              protein: goalObj.protein,
+              carbs: goalObj.carbs,
+              fat: goalObj.fat
+            })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('goals')
+            .insert({
+              date: goalObj.date,
+              calories: goalObj.calories,
+              protein: goalObj.protein,
+              carbs: goalObj.carbs,
+              fat: goalObj.fat
+            });
+          if (error) throw error;
+        }
+        return goalObj;
       },
+
       async getSetting(key) {
-        const db = await initDB();
-        return new Promise((resolve) => {
-          const tx = db.transaction('settings', 'readonly');
-          const store = tx.objectStore('settings');
-          const req = store.get(key);
-          req.onsuccess = () => resolve(req.result ? req.result.value : null);
-          req.onerror = () => resolve(null);
-        });
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', key)
+          .maybeSingle();
+
+        if (error) throw error;
+        return data ? data.value : null;
       },
+
       async saveSetting(key, value) {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('settings', 'readwrite');
-          const store = tx.objectStore('settings');
-          const req = store.put({ key, value });
-          req.onsuccess = () => resolve(value);
-          req.onerror = () => reject('儲存設定失敗');
-        });
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('id')
+          .eq('key', key)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('settings')
+            .update({ value })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('settings')
+            .insert({ key, value });
+          if (error) throw error;
+        }
+        return value;
       }
     };
 
@@ -365,7 +423,7 @@
           }
         } catch (err) {
           console.error("載入資料失敗:", err);
-          setErrorMsg("讀取貓貓紀錄失敗，請重新整理頁面喵。");
+          setErrorMsg("讀取貓貓紀錄失敗，請確認資料庫連線喵。");
         }
       }, []);
 
@@ -505,6 +563,7 @@
           setEditingMeal(null);
           setIsAddingModalOpen(false);
         } catch (err) {
+          console.error(err);
           setErrorMsg("儲存餐點失敗喵");
         }
       };
@@ -518,6 +577,7 @@
           setIsSettingsOpen(false);
           showToast("個人目標與設定已儲存喵 🐾");
         } catch (err) {
+          console.error(err);
           setErrorMsg("儲存設定失敗喵");
         }
       };
@@ -531,7 +591,7 @@
       return (
         <div className="w-full max-w-lg mx-auto p-4 flex flex-col min-h-screen overflow-x-hidden">
           
-          {/* 頂部標題與可愛貓貓 Logo */}
+          {/* 頂部標題 */}
           <header className="flex justify-between items-center py-3 mb-2 border-b border-amber-200/60">
             <div className="flex items-center space-x-2.5">
               <div className="w-11 h-11 bg-gradient-to-tr from-amber-200 to-rose-200 text-2xl rounded-2xl flex items-center justify-center shadow-md shadow-amber-200/50 border border-white animate-cat-float">
@@ -540,7 +600,7 @@
               <div>
                 <h1 className="text-lg font-black text-amber-950 flex items-center gap-1.5 leading-tight">
                   AI 喵喵熱量管家
-                  <span className="text-xs bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full font-bold">🐾 陪伴版</span>
+                  <span className="text-xs bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full font-bold">🐾 雲端版</span>
                 </h1>
                 <p className="text-xs text-amber-700/80 font-medium">喵星人駐站‧陪你健康吃美味</p>
               </div>
@@ -554,15 +614,15 @@
             </button>
           </header>
 
-          {/* 錯誤通知欄 */}
+          {/* 錯誤通知 */}
           {errorMsg && (
-            <div className="mb-4 p-3 bg-rose-100 border border-rose-300 text-rose-700 rounded-2xl text-xs flex justify-between items-center shadow-sm animate-bounce">
+            <div className="mb-4 p-3 bg-rose-100 border border-rose-300 text-rose-700 rounded-2xl text-xs flex justify-between items-center shadow-sm">
               <span className="font-medium">🐾 {errorMsg}</span>
               <button onClick={() => setErrorMsg(null)} className="text-rose-500 font-bold ml-2">✕</button>
             </div>
           )}
 
-          {/* Toast 輕提示 */}
+          {/* Toast */}
           {toastMsg && (
             <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-amber-900 text-amber-50 px-5 py-2.5 rounded-full font-extrabold text-xs shadow-xl transition-all border-2 border-amber-300 flex items-center gap-1.5">
               <span>🐾</span>
@@ -570,8 +630,7 @@
             </div>
           )}
 
-          {}
-          {/* 日期選擇器列 */}
+          {/* 日期選擇器 */}
           <section className="bg-white/90 backdrop-blur border border-amber-200/80 rounded-2xl p-3 mb-4 flex items-center justify-between shadow-sm">
             <button 
               onClick={() => handleDateChange(-1)} 
@@ -600,7 +659,7 @@
             </button>
           </section>
 
-          {/* 每日熱量進度卡片 (清新奶油與粉綠色調) */}
+          {/* 每日熱量進度卡片 */}
           <section className="bg-white/95 border border-amber-200/90 rounded-3xl p-5 mb-5 relative overflow-hidden shadow-md shadow-amber-900/5">
             <div className="absolute -top-3 -right-3 text-6xl opacity-10 pointer-events-none select-none">
               🐾
@@ -627,7 +686,6 @@
               </div>
             </div>
 
-            {/* 進度條 */}
             <div className="w-full bg-amber-100/80 h-3.5 rounded-full overflow-hidden mb-4 p-0.5 border border-amber-200">
               <div 
                 className={`h-full rounded-full transition-all duration-500 ${
@@ -637,7 +695,6 @@
               ></div>
             </div>
 
-            {/* 三大營養素分佈 */}
             <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-amber-100 text-center">
               <div className="bg-amber-50/80 border border-amber-100 p-2.5 rounded-2xl">
                 <p className="text-[11px] text-amber-800 font-bold">🥩 蛋白質</p>
@@ -654,7 +711,7 @@
             </div>
           </section>
 
-          {/* 拍照分析 / 手動新增區 */}
+          {/* 拍照 / 手動新增 */}
           <section className="grid grid-cols-2 gap-3 mb-6">
             <label className={`cursor-pointer flex flex-col items-center justify-center p-4 bg-gradient-to-br from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-white rounded-3xl font-extrabold transition shadow-md shadow-emerald-500/20 active:scale-95 border border-emerald-300 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               <span className="text-2xl mb-1 animate-paw">📸</span>
@@ -691,7 +748,7 @@
             </button>
           </section>
 
-          {/* AI 分析狀態讀取中 */}
+          {/* AI 分析中 */}
           {loading && (
             <div className="bg-white/95 border-2 border-dashed border-emerald-400 p-5 rounded-3xl mb-6 text-center shadow-lg">
               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-2 animate-spin">
@@ -701,7 +758,7 @@
             </div>
           )}
 
-          {/* 今日飲食紀錄列表 */}
+          {/* 飲食紀錄列表 */}
           <section className="flex-1">
             <h2 className="text-xs font-extrabold text-amber-900 mb-3 flex items-center justify-between px-1">
               <span className="flex items-center gap-1">
@@ -722,7 +779,6 @@
                 {meals.map((meal) => (
                   <div key={meal.id} className="bg-white/95 border border-amber-200/80 rounded-3xl p-4 shadow-sm hover:shadow-md transition">
                     <div className="flex space-x-3">
-                      {/* 照片預覽 */}
                       {meal.image ? (
                         <img 
                           src={meal.image} 
@@ -748,14 +804,12 @@
                           </span>
                         </div>
 
-                        {/* 三大營養 */}
                         <div className="flex space-x-3 text-[11px] text-slate-500 font-bold mt-2">
                           <span>蛋 <strong className="text-slate-800">{meal.protein}g</strong></span>
                           <span>碳 <strong className="text-slate-800">{meal.carbs}g</strong></span>
                           <span>脂 <strong className="text-slate-800">{meal.fat}g</strong></span>
                         </div>
 
-                        {/* 喵星人 AI 建議 */}
                         {meal.aiAdvice && (
                           <div className="text-[11px] text-amber-900 bg-amber-50/90 p-2.5 rounded-xl mt-2 border border-amber-200/60 leading-relaxed font-medium flex gap-1.5 items-start">
                             <span className="text-sm">🐾</span>
@@ -763,7 +817,6 @@
                           </div>
                         )}
 
-                        {/* 操作按鈕 */}
                         <div className="flex justify-end space-x-3 mt-3 pt-2 border-t border-amber-100 text-xs font-bold">
                           <button 
                             onClick={() => handleOpenEdit(meal)} 
@@ -907,7 +960,7 @@
             </div>
           )}
 
-          {/* 個人設定 Modal */}
+          {/* 設定 Modal */}
           {isSettingsOpen && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white border-2 border-amber-200 rounded-3xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
