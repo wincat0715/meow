@@ -4,40 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 貓咪飲食熱量管家 🐾</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React 18 & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel for React JSX Compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
       body { 
         font-family: 'Zen Maru Gothic', 'Nunito', system-ui, -apple-system, sans-serif;
         overscroll-behavior-y: contain;
       }
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
       @keyframes float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
         50% { transform: translateY(-4px) rotate(2deg); }
       }
-      .animate-cat-float { animation: float 3s ease-in-out infinite; }
+      .animate-cat-float {
+        animation: float 3s ease-in-out infinite;
+      }
       @keyframes paw-bounce {
         0%, 100% { transform: scale(1); }
         50% { transform: scale(1.15); }
       }
-      .animate-paw { animation: paw-bounce 1.5s infinite; }
+      .animate-paw {
+        animation: paw-bounce 1.5s infinite;
+      }
     </style>
 </head>
 <body class="bg-gradient-to-b from-amber-50/90 via-rose-50/50 to-emerald-50/40 text-slate-700 min-h-screen selection:bg-rose-200 selection:text-rose-900 pb-12">
   <div id="root"></div>
 
   <script type="text/babel">
+
+    // 安全數字轉化
     const safeNum = (val, fallback = 0) => {
       const num = Number(val);
       return isNaN(num) || num === null || num === undefined ? fallback : Math.round(num);
     };
 
+    // 取得當地日期 YYYY-MM-DD
     const getLocalDateString = (dateObj = new Date()) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -45,83 +62,155 @@
       return `${year}-${month}-${day}`;
     };
 
-    // ==================== Supabase (Anon Key 本身設計即為前端公開使用) ====================
+    // ==================== Supabase 設定 ====================
     const SUPABASE_URL = 'https://pyfpuszqfuwmywwdwrua.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_Gw5-YC_DecCyuYipN-L46w_9gZGCgZW';
+
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ==================== Gemini API Key 動態讀取邏輯 ====================
-    const getGeminiKey = () => {
-      let key = localStorage.getItem('cat_app_gemini_key');
-      if (!key) {
-        key = prompt("🐾 喵～請輸入您的 Gemini API Key（Key 僅會保存在您的機器中，不會上傳）：");
-        if (key && key.trim()) {
-          key = key.trim();
-          localStorage.setItem('cat_app_gemini_key', key);
-        }
-      }
-      return key;
-    };
-
+    // ==================== 資料庫操作 ====================
     const dbStore = {
       async saveMeal(meal) {
-        const { data, error } = await supabase.from('meals').upsert({
-          id: meal.id, date: meal.date, time: meal.time, meal_type: meal.mealType,
-          meal_name: meal.mealName, calories: meal.calories, protein: meal.protein,
-          carbs: meal.carbs, fat: meal.fat, health_score: meal.healthScore || 80,
-          ai_advice: meal.aiAdvice || '', image: meal.image || null, items: meal.items || []
-        }).select().single();
+        const { data, error } = await supabase
+          .from('meals')
+          .upsert({
+            id: meal.id,
+            date: meal.date,
+            time: meal.time,
+            meal_type: meal.mealType,
+            meal_name: meal.mealName,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fat: meal.fat,
+            health_score: meal.healthScore || 80,
+            ai_advice: meal.aiAdvice || '',
+            image: meal.image || null,
+            items: meal.items || []
+          })
+          .select()
+          .single();
+
         if (error) throw error;
         return data;
       },
+
       async getMealsByDate(date) {
-        const { data, error } = await supabase.from('meals').select('*').eq('date', date).order('time', { ascending: false });
+        const { data, error } = await supabase
+          .from('meals')
+          .select('*')
+          .eq('date', date)
+          .order('time', { ascending: false });
+
         if (error) throw error;
+
         return (data || []).map(row => ({
-          id: row.id, date: row.date, time: row.time, mealType: row.meal_type,
-          mealName: row.meal_name, calories: row.calories, protein: row.protein,
-          carbs: row.carbs, fat: row.fat, healthScore: row.health_score,
-          aiAdvice: row.ai_advice, image: row.image, items: row.items || []
+          id: row.id,
+          date: row.date,
+          time: row.time,
+          mealType: row.meal_type,
+          mealName: row.meal_name,
+          calories: row.calories,
+          protein: row.protein,
+          carbs: row.carbs,
+          fat: row.fat,
+          healthScore: row.health_score,
+          aiAdvice: row.ai_advice,
+          image: row.image,
+          items: row.items || []
         }));
       },
+
       async deleteMeal(id) {
-        const { error } = await supabase.from('meals').delete().eq('id', id);
+        const { error } = await supabase
+          .from('meals')
+          .delete()
+          .eq('id', id);
+
         if (error) throw error;
         return true;
       },
+
       async getGoal(date) {
-        const { data, error } = await supabase.from('goals').select('*').eq('date', date).maybeSingle();
+        const { data, error } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('date', date)
+          .maybeSingle();
+
         if (error) throw error;
         if (!data) return null;
-        return { calories: data.calories, protein: data.protein, carbs: data.carbs, fat: data.fat };
+
+        return {
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat
+        };
       },
+
       async saveGoal(goalObj) {
-        const { data: existing } = await supabase.from('goals').select('id').eq('date', goalObj.date).maybeSingle();
+        // 先查有沒有這天的目標
+        const { data: existing } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('date', goalObj.date)
+          .maybeSingle();
+
         if (existing) {
-          const { error } = await supabase.from('goals').update({
-            calories: goalObj.calories, protein: goalObj.protein, carbs: goalObj.carbs, fat: goalObj.fat
-          }).eq('id', existing.id);
+          const { error } = await supabase
+            .from('goals')
+            .update({
+              calories: goalObj.calories,
+              protein: goalObj.protein,
+              carbs: goalObj.carbs,
+              fat: goalObj.fat
+            })
+            .eq('id', existing.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from('goals').insert({
-            date: goalObj.date, calories: goalObj.calories, protein: goalObj.protein, carbs: goalObj.carbs, fat: goalObj.fat
-          });
+          const { error } = await supabase
+            .from('goals')
+            .insert({
+              date: goalObj.date,
+              calories: goalObj.calories,
+              protein: goalObj.protein,
+              carbs: goalObj.carbs,
+              fat: goalObj.fat
+            });
           if (error) throw error;
         }
         return goalObj;
       },
+
       async getSetting(key) {
-        const { data, error } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', key)
+          .maybeSingle();
+
         if (error) throw error;
         return data ? data.value : null;
       },
+
       async saveSetting(key, value) {
-        const { data: existing } = await supabase.from('settings').select('id').eq('key', key).maybeSingle();
+        const { data: existing } = await supabase
+          .from('settings')
+          .select('id')
+          .eq('key', key)
+          .maybeSingle();
+
         if (existing) {
-          const { error } = await supabase.from('settings').update({ value }).eq('id', existing.id);
+          const { error } = await supabase
+            .from('settings')
+            .update({ value })
+            .eq('id', existing.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from('settings').insert({ key, value });
+          const { error } = await supabase
+            .from('settings')
+            .insert({ key, value });
           if (error) throw error;
         }
         return value;
@@ -138,7 +227,9 @@
         reader.onload = (e) => {
           const img = new Image();
           img.onload = () => {
-            let width = img.width, height = img.height;
+            let width = img.width;
+            let height = img.height;
+
             if (width > maxDimension || height > maxDimension) {
               if (width > height) {
                 height = Math.round((height * maxDimension) / width);
@@ -148,11 +239,15 @@
                 height = maxDimension;
               }
             }
+
             const canvas = document.createElement('canvas');
-            canvas.width = width; canvas.height = height;
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
+
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedBase64);
           };
           img.onerror = () => reject(new Error('圖片讀取失敗，檔案可能損毀喵'));
           img.src = e.target.result;
@@ -162,12 +257,7 @@
       });
     };
 
-    const analyzeFoodWithAI = async (base64Image) => {
-      const apiKey = getGeminiKey();
-      if (!apiKey) {
-        throw new Error("沒有輸入 API Key 喵！無法啟用 AI 拍照辨識。");
-      }
-
+    const analyzeFoodWithAI = async (base64Image, customApiKey = "") => {
       const base64Data = base64Image.split(',')[1] || base64Image;
 
       const prompt = `你是一位超可愛又專業的「喵星人營養師 🐾」。請詳細分析這張圖片中的食物與飲料。
@@ -188,17 +278,27 @@
 }`;
 
       const payload = {
-        contents: [{
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-          ]
-        }],
-        generationConfig: { responseMimeType: "application/json" }
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
       };
 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const apiKey = customApiKey || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -206,13 +306,8 @@
         body: JSON.stringify(payload)
       });
 
-      if (response.status === 401 || response.status === 400) {
-        localStorage.removeItem('cat_app_gemini_key');
-        throw new Error(`API Key 無效或已過期 (${response.status})，請重新輸入喵！`);
-      }
-
       if (!response.ok) {
-        throw new Error(`AI 辨識服務回應異常 (${response.status})。請檢查網路連線喵。`);
+        throw new Error(`AI 辨識服務回應異常 (${response.status})。請檢查 API Key 或網路連線喵。`);
       }
 
       const result = await response.json();
@@ -261,10 +356,15 @@
           return (
             <div className="min-h-screen flex items-center justify-center p-6 bg-amber-50 text-slate-800">
               <div className="max-w-md w-full bg-white border border-rose-200 rounded-3xl p-6 text-center shadow-xl">
-                <div className="w-20 h-20 bg-rose-100 text-3xl rounded-full flex items-center justify-center mx-auto mb-4 animate-paw">😿</div>
+                <div className="w-20 h-20 bg-rose-100 text-3xl rounded-full flex items-center justify-center mx-auto mb-4 animate-paw">
+                  😿
+                </div>
                 <h2 className="text-xl font-bold mb-2 text-rose-600">喵嗷！發生了一點小不順手</h2>
                 <p className="text-slate-500 text-sm mb-6">{this.state.error?.message || "未知錯誤"}</p>
-                <button onClick={() => window.location.reload()} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-2xl transition shadow-lg shadow-emerald-500/20">
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-2xl transition shadow-lg shadow-emerald-500/20"
+                >
                   重新啟動喵喵管家 🐾
                 </button>
               </div>
@@ -279,17 +379,26 @@
       const [selectedDate, setSelectedDate] = React.useState(getLocalDateString());
       const [meals, setMeals] = React.useState([]);
       const [goal, setGoal] = React.useState({ calories: 2000, protein: 120, carbs: 225, fat: 65 });
+      const [customApiKey, setCustomApiKey] = React.useState("");
       const [loading, setLoading] = React.useState(false);
       const [analyzingStatus, setAnalyzingStatus] = React.useState("");
       const [errorMsg, setErrorMsg] = React.useState(null);
       const [toastMsg, setToastMsg] = React.useState(null);
+
       const [isAddingModalOpen, setIsAddingModalOpen] = React.useState(false);
       const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
       const [editingMeal, setEditingMeal] = React.useState(null);
+
       const [formData, setFormData] = React.useState({
-        mealName: '', mealType: '午餐', calories: 500, protein: 25, carbs: 60, fat: 18,
+        mealName: '',
+        mealType: '午餐',
+        calories: 500,
+        protein: 25,
+        carbs: 60,
+        fat: 18,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-        image: null, aiAdvice: ''
+        image: null,
+        aiAdvice: ''
       });
 
       const showToast = (msg) => {
@@ -302,12 +411,15 @@
           setErrorMsg(null);
           const dayMeals = await dbStore.getMealsByDate(dateStr);
           setMeals(dayMeals);
+
           const storedGoal = await dbStore.getGoal(dateStr);
           if (storedGoal) {
             setGoal(storedGoal);
           } else {
             const savedDefaultGoal = await dbStore.getSetting('default_goal');
-            if (savedDefaultGoal) setGoal(savedDefaultGoal);
+            if (savedDefaultGoal) {
+              setGoal(savedDefaultGoal);
+            }
           }
         } catch (err) {
           console.error("載入資料失敗:", err);
@@ -316,7 +428,16 @@
       }, []);
 
       React.useEffect(() => {
-        loadDayData(selectedDate);
+        const init = async () => {
+          try {
+            const key = await dbStore.getSetting('user_api_key');
+            if (key) setCustomApiKey(key);
+            await loadDayData(selectedDate);
+          } catch (e) {
+            console.error("初始化失敗:", e);
+          }
+        };
+        init();
       }, [selectedDate, loadDayData]);
 
       const dailyTotals = React.useMemo(() => {
@@ -333,13 +454,17 @@
         const file = e.target.files?.[0];
         if (!file) return;
         e.target.value = '';
+
         setLoading(true);
         setErrorMsg(null);
         setAnalyzingStatus("喵喵正在幫你把照片微調得美美的... 🐾");
+
         try {
           const compressedBase64 = await compressImage(file, 800, 0.75);
           setAnalyzingStatus("喵星人營養師正仔細端詳食物中... 🐟");
-          const aiResult = await analyzeFoodWithAI(compressedBase64);
+
+          const aiResult = await analyzeFoodWithAI(compressedBase64, customApiKey);
+
           const newMeal = {
             id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
             date: selectedDate,
@@ -355,6 +480,7 @@
             image: compressedBase64,
             items: aiResult.items
           };
+
           await dbStore.saveMeal(newMeal);
           setMeals(prev => [newMeal, ...prev]);
           showToast(`成功辨識：${newMeal.mealName} (+${newMeal.calories} kcal) 🐾`);
@@ -406,6 +532,7 @@
           setErrorMsg("請填寫餐點名稱喵～");
           return;
         }
+
         try {
           const updatedMeal = {
             id: editingMeal ? editingMeal.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
@@ -422,7 +549,9 @@
             image: formData.image || null,
             items: editingMeal ? (editingMeal.items || []) : []
           };
+
           await dbStore.saveMeal(updatedMeal);
+
           if (editingMeal) {
             setMeals(prev => prev.map(m => m.id === updatedMeal.id ? updatedMeal : m));
             showToast("成功修改餐點紀錄 🐾");
@@ -430,6 +559,7 @@
             setMeals(prev => [updatedMeal, ...prev]);
             showToast("成功新增餐點紀錄 🐾");
           }
+
           setEditingMeal(null);
           setIsAddingModalOpen(false);
         } catch (err) {
@@ -441,6 +571,7 @@
       const handleSaveSettings = async (e) => {
         e.preventDefault();
         try {
+          await dbStore.saveSetting('user_api_key', customApiKey.trim());
           await dbStore.saveSetting('default_goal', goal);
           await dbStore.saveGoal({ date: selectedDate, ...goal });
           setIsSettingsOpen(false);
@@ -451,11 +582,6 @@
         }
       };
 
-      const handleResetKey = () => {
-        localStorage.removeItem('cat_app_gemini_key');
-        showToast("已清除 API Key，下次使用拍照時將會重新詢問 🐾");
-      };
-
       const handleDateChange = (offsetDays) => {
         const curr = new Date(selectedDate);
         curr.setDate(curr.getDate() + offsetDays);
@@ -464,9 +590,13 @@
 
       return (
         <div className="w-full max-w-lg mx-auto p-4 flex flex-col min-h-screen overflow-x-hidden">
+          
+          {/* 頂部標題 */}
           <header className="flex justify-between items-center py-3 mb-2 border-b border-amber-200/60">
             <div className="flex items-center space-x-2.5">
-              <div className="w-11 h-11 bg-gradient-to-tr from-amber-200 to-rose-200 text-2xl rounded-2xl flex items-center justify-center shadow-md shadow-amber-200/50 border border-white animate-cat-float">🐱</div>
+              <div className="w-11 h-11 bg-gradient-to-tr from-amber-200 to-rose-200 text-2xl rounded-2xl flex items-center justify-center shadow-md shadow-amber-200/50 border border-white animate-cat-float">
+                🐱
+              </div>
               <div>
                 <h1 className="text-lg font-black text-amber-950 flex items-center gap-1.5 leading-tight">
                   AI 喵喵熱量管家
@@ -475,11 +605,16 @@
                 <p className="text-xs text-amber-700/80 font-medium">喵星人駐站‧陪你健康吃美味</p>
               </div>
             </div>
-            <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-white/80 hover:bg-white text-amber-800 rounded-2xl transition border border-amber-200 shadow-sm active:scale-95">
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2.5 bg-white/80 hover:bg-white text-amber-800 rounded-2xl transition border border-amber-200 shadow-sm active:scale-95"
+              title="個人與目標設定"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </button>
           </header>
 
+          {/* 錯誤通知 */}
           {errorMsg && (
             <div className="mb-4 p-3 bg-rose-100 border border-rose-300 text-rose-700 rounded-2xl text-xs flex justify-between items-center shadow-sm">
               <span className="font-medium">🐾 {errorMsg}</span>
@@ -487,39 +622,79 @@
             </div>
           )}
 
+          {/* Toast */}
           {toastMsg && (
-            <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-amber-900 text-amber-50 px-5 py-2.5 rounded-full font-extrabold text-xs shadow-xl border-2 border-amber-300 flex items-center gap-1.5">
-              <span>🐾</span><span>{toastMsg}</span>
+            <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-amber-900 text-amber-50 px-5 py-2.5 rounded-full font-extrabold text-xs shadow-xl transition-all border-2 border-amber-300 flex items-center gap-1.5">
+              <span>🐾</span>
+              <span>{toastMsg}</span>
             </div>
           )}
 
+          {/* 日期選擇器 */}
           <section className="bg-white/90 backdrop-blur border border-amber-200/80 rounded-2xl p-3 mb-4 flex items-center justify-between shadow-sm">
-            <button onClick={() => handleDateChange(-1)} className="p-2 text-amber-700 hover:text-amber-900 rounded-xl hover:bg-amber-100/60 font-black">◀</button>
+            <button 
+              onClick={() => handleDateChange(-1)} 
+              className="p-2 text-amber-700 hover:text-amber-900 rounded-xl hover:bg-amber-100/60 font-black transition"
+            >
+              ◀
+            </button>
             <div className="flex items-center space-x-2">
-              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-sm font-extrabold text-amber-900 focus:outline-none cursor-pointer text-center" />
-              {selectedDate === getLocalDateString() && <span className="text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">今日喵</span>}
+              <input 
+                type="date" 
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-sm font-extrabold text-amber-900 focus:outline-none cursor-pointer text-center"
+              />
+              {selectedDate === getLocalDateString() && (
+                <span className="text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                  今日喵
+                </span>
+              )}
             </div>
-            <button onClick={() => handleDateChange(1)} className="p-2 text-amber-700 hover:text-amber-900 rounded-xl hover:bg-amber-100/60 font-black">▶</button>
+            <button 
+              onClick={() => handleDateChange(1)} 
+              className="p-2 text-amber-700 hover:text-amber-900 rounded-xl hover:bg-amber-100/60 font-black transition"
+            >
+              ▶
+            </button>
           </section>
 
+          {/* 每日熱量進度卡片 */}
           <section className="bg-white/95 border border-amber-200/90 rounded-3xl p-5 mb-5 relative overflow-hidden shadow-md shadow-amber-900/5">
-            <div className="absolute -top-3 -right-3 text-6xl opacity-10 pointer-events-none">🐾</div>
+            <div className="absolute -top-3 -right-3 text-6xl opacity-10 pointer-events-none select-none">
+              🐾
+            </div>
+            
             <div className="flex justify-between items-end mb-3">
               <div>
-                <p className="text-xs text-amber-700 font-extrabold uppercase tracking-wide">🐾 今日熱量進度</p>
+                <p className="text-xs text-amber-700 font-extrabold uppercase tracking-wide flex items-center gap-1">
+                  <span>🐾 今日熱量進度</span>
+                </p>
                 <div className="flex items-baseline space-x-1.5 mt-1">
                   <span className="text-3xl font-black text-slate-800">{dailyTotals.calories}</span>
                   <span className="text-xs text-amber-700 font-bold">/ {goal.calories} kcal</span>
                 </div>
               </div>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm ${dailyTotals.calories > goal.calories ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
-                {dailyTotals.calories > goal.calories ? '⚠️ 稍微吃太飽喵！' : `還可以吃 ${goal.calories - dailyTotals.calories} kcal 🐟`}
-              </span>
+              <div className="text-right">
+                <span className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm flex items-center gap-1 ${
+                  dailyTotals.calories > goal.calories 
+                    ? 'bg-rose-100 text-rose-700 border border-rose-300' 
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                }`}>
+                  {dailyTotals.calories > goal.calories ? '⚠️ 稍微吃太飽喵！' : `還可以吃 ${goal.calories - dailyTotals.calories} kcal 🐟`}
+                </span>
+              </div>
             </div>
+
             <div className="w-full bg-amber-100/80 h-3.5 rounded-full overflow-hidden mb-4 p-0.5 border border-amber-200">
-              <div className={`h-full rounded-full transition-all duration-500 ${dailyTotals.calories > goal.calories ? 'bg-gradient-to-r from-rose-400 to-red-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`}
-                style={{ width: `${Math.min(100, (dailyTotals.calories / goal.calories) * 100)}%` }}></div>
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  dailyTotals.calories > goal.calories ? 'bg-gradient-to-r from-rose-400 to-red-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                }`}
+                style={{ width: `${Math.min(100, (dailyTotals.calories / goal.calories) * 100)}%` }}
+              ></div>
             </div>
+
             <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-amber-100 text-center">
               <div className="bg-amber-50/80 border border-amber-100 p-2.5 rounded-2xl">
                 <p className="text-[11px] text-amber-800 font-bold">🥩 蛋白質</p>
@@ -536,36 +711,60 @@
             </div>
           </section>
 
+          {/* 拍照 / 手動新增 */}
           <section className="grid grid-cols-2 gap-3 mb-6">
             <label className={`cursor-pointer flex flex-col items-center justify-center p-4 bg-gradient-to-br from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-white rounded-3xl font-extrabold transition shadow-md shadow-emerald-500/20 active:scale-95 border border-emerald-300 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               <span className="text-2xl mb-1 animate-paw">📸</span>
               <span className="text-xs tracking-wide">AI 拍照辨識喵</span>
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+              <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                onChange={handlePhotoUpload} 
+                className="hidden" 
+              />
             </label>
-            <button onClick={() => {
-              setEditingMeal(null);
-              setFormData({
-                mealName: '', mealType: '午餐', calories: 400, protein: 20, carbs: 50, fat: 15,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                image: null, aiAdvice: ''
-              });
-              setIsAddingModalOpen(true);
-            }} className="flex flex-col items-center justify-center p-4 bg-white hover:bg-amber-50/80 text-amber-900 border border-amber-200 rounded-3xl font-extrabold transition shadow-sm active:scale-95">
+
+            <button 
+              onClick={() => {
+                setEditingMeal(null);
+                setFormData({
+                  mealName: '',
+                  mealType: '午餐',
+                  calories: 400,
+                  protein: 20,
+                  carbs: 50,
+                  fat: 15,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  image: null,
+                  aiAdvice: ''
+                });
+                setIsAddingModalOpen(true);
+              }}
+              className="flex flex-col items-center justify-center p-4 bg-white hover:bg-amber-50/80 text-amber-900 border border-amber-200 rounded-3xl font-extrabold transition shadow-sm active:scale-95"
+            >
               <span className="text-2xl mb-1">✍️</span>
               <span className="text-xs tracking-wide">手動新增餐點</span>
             </button>
           </section>
 
+          {/* AI 分析中 */}
           {loading && (
             <div className="bg-white/95 border-2 border-dashed border-emerald-400 p-5 rounded-3xl mb-6 text-center shadow-lg">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-2 animate-spin">🐾</div>
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-2 animate-spin">
+                🐾
+              </div>
               <p className="text-xs text-emerald-800 font-black">{analyzingStatus}</p>
             </div>
           )}
 
+          {/* 飲食紀錄列表 */}
           <section className="flex-1">
             <h2 className="text-xs font-extrabold text-amber-900 mb-3 flex items-center justify-between px-1">
-              <span className="flex items-center gap-1">🐟 飲食紀錄 <span className="bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full text-[10px]">{meals.length} 筆</span></span>
+              <span className="flex items-center gap-1">
+                <span>🐟 飲食紀錄</span>
+                <span className="bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full text-[10px]">{meals.length} 筆</span>
+              </span>
               <span className="text-amber-700 font-bold">{selectedDate}</span>
             </h2>
 
@@ -581,31 +780,56 @@
                   <div key={meal.id} className="bg-white/95 border border-amber-200/80 rounded-3xl p-4 shadow-sm hover:shadow-md transition">
                     <div className="flex space-x-3">
                       {meal.image ? (
-                        <img src={meal.image} alt={meal.mealName} className="w-16 h-16 object-cover rounded-2xl bg-amber-100 border border-amber-200 flex-shrink-0" />
+                        <img 
+                          src={meal.image} 
+                          alt={meal.mealName} 
+                          className="w-16 h-16 object-cover rounded-2xl bg-amber-100 border border-amber-200 flex-shrink-0"
+                        />
                       ) : (
-                        <div className="w-16 h-16 bg-gradient-to-br from-amber-100 to-rose-100 text-amber-800 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl font-bold border border-amber-200">🍱</div>
+                        <div className="w-16 h-16 bg-gradient-to-br from-amber-100 to-rose-100 text-amber-800 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl font-bold border border-amber-200">
+                          🍱
+                        </div>
                       )}
+
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full">{meal.mealType} • {meal.time}</span>
+                            <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full">
+                              {meal.mealType} • {meal.time}
+                            </span>
                             <h3 className="text-sm font-black text-slate-800 truncate mt-1">{meal.mealName}</h3>
                           </div>
-                          <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">+{meal.calories} kcal</span>
+                          <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                            +{meal.calories} kcal
+                          </span>
                         </div>
+
                         <div className="flex space-x-3 text-[11px] text-slate-500 font-bold mt-2">
                           <span>蛋 <strong className="text-slate-800">{meal.protein}g</strong></span>
                           <span>碳 <strong className="text-slate-800">{meal.carbs}g</strong></span>
                           <span>脂 <strong className="text-slate-800">{meal.fat}g</strong></span>
                         </div>
+
                         {meal.aiAdvice && (
                           <div className="text-[11px] text-amber-900 bg-amber-50/90 p-2.5 rounded-xl mt-2 border border-amber-200/60 leading-relaxed font-medium flex gap-1.5 items-start">
-                            <span className="text-sm">🐾</span><span>{meal.aiAdvice}</span>
+                            <span className="text-sm">🐾</span>
+                            <span>{meal.aiAdvice}</span>
                           </div>
                         )}
+
                         <div className="flex justify-end space-x-3 mt-3 pt-2 border-t border-amber-100 text-xs font-bold">
-                          <button onClick={() => handleOpenEdit(meal)} className="text-amber-700 hover:text-emerald-600">✏️ 修改</button>
-                          <button onClick={() => handleDeleteMeal(meal.id)} className="text-rose-400 hover:text-rose-600">🗑️ 刪除</button>
+                          <button 
+                            onClick={() => handleOpenEdit(meal)} 
+                            className="text-amber-700 hover:text-emerald-600 transition"
+                          >
+                            ✏️ 修改
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteMeal(meal.id)} 
+                            className="text-rose-400 hover:text-rose-600 transition"
+                          >
+                            🗑️ 刪除
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -615,27 +839,44 @@
             )}
           </section>
 
+          {/* 新增 / 修改 Modal */}
           {(isAddingModalOpen || editingMeal) && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white border-2 border-amber-200 rounded-3xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="flex justify-between items-center mb-4 border-b border-amber-100 pb-2">
                   <h3 className="text-base font-black text-amber-950 flex items-center gap-1.5">
-                    <span>🐾</span><span>{editingMeal ? '修改餐點紀錄' : '手動新增飲食紀錄'}</span>
+                    <span>🐾</span>
+                    <span>{editingMeal ? '修改餐點紀錄' : '手動新增飲食紀錄'}</span>
                   </h3>
-                  <button onClick={() => { setIsAddingModalOpen(false); setEditingMeal(null); }} className="text-amber-700 hover:text-amber-900 font-bold text-lg">✕</button>
+                  <button 
+                    onClick={() => { setIsAddingModalOpen(false); setEditingMeal(null); }}
+                    className="text-amber-700 hover:text-amber-900 font-bold text-lg"
+                  >
+                    ✕
+                  </button>
                 </div>
+
                 <form onSubmit={handleSaveMealForm} className="space-y-3.5">
                   <div>
                     <label className="block text-xs font-bold text-amber-900 mb-1">餐點名稱</label>
-                    <input type="text" required placeholder="例如: 鮭魚仙貝便當與無糖綠茶" value={formData.mealName}
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="例如: 鮭魚仙貝便當與無糖綠茶"
+                      value={formData.mealName}
                       onChange={e => setFormData({...formData, mealName: e.target.value})}
-                      className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500 focus:bg-white" />
+                      className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500 focus:bg-white"
+                    />
                   </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-amber-900 mb-1">餐點類別</label>
-                      <select value={formData.mealType} onChange={e => setFormData({...formData, mealType: e.target.value})}
-                        className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500">
+                      <select 
+                        value={formData.mealType}
+                        onChange={e => setFormData({...formData, mealType: e.target.value})}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      >
                         <option value="早餐">早餐 🥐</option>
                         <option value="午餐">午餐 🍱</option>
                         <option value="下午茶">下午茶 🍰</option>
@@ -645,98 +886,186 @@
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-amber-900 mb-1">時間</label>
-                      <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})}
-                        className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500" />
+                      <input 
+                        type="time" 
+                        value={formData.time}
+                        onChange={e => setFormData({...formData, time: e.target.value})}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                      />
                     </div>
                   </div>
+
                   <div>
                     <label className="block text-xs font-bold text-amber-900 mb-1">熱量 (kcal)</label>
-                    <input type="number" min="0" required value={formData.calories}
+                    <input 
+                      type="number" 
+                      min="0"
+                      required
+                      value={formData.calories}
                       onChange={e => setFormData({...formData, calories: safeNum(e.target.value)})}
-                      className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:border-emerald-500" />
+                      className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:border-emerald-500"
+                    />
                   </div>
+
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[11px] font-bold text-amber-800 mb-1">蛋白質 (g)</label>
-                      <input type="number" min="0" value={formData.protein} onChange={e => setFormData({...formData, protein: safeNum(e.target.value)})}
-                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700" />
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={formData.protein}
+                        onChange={e => setFormData({...formData, protein: safeNum(e.target.value)})}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-amber-800 mb-1">碳水化合物 (g)</label>
-                      <input type="number" min="0" value={formData.carbs} onChange={e => setFormData({...formData, carbs: safeNum(e.target.value)})}
-                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700" />
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={formData.carbs}
+                        onChange={e => setFormData({...formData, carbs: safeNum(e.target.value)})}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-amber-800 mb-1">脂肪 (g)</label>
-                      <input type="number" min="0" value={formData.fat} onChange={e => setFormData({...formData, fat: safeNum(e.target.value)})}
-                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700" />
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={formData.fat}
+                        onChange={e => setFormData({...formData, fat: safeNum(e.target.value)})}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-700"
+                      />
                     </div>
                   </div>
+
                   <div className="pt-3 flex space-x-3">
-                    <button type="button" onClick={() => { setIsAddingModalOpen(false); setEditingMeal(null); }}
-                      className="w-1/2 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold rounded-2xl text-xs">取消</button>
-                    <button type="submit" className="w-1/2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl text-xs shadow-md shadow-emerald-500/20">儲存變更 🐾</button>
+                    <button 
+                      type="button"
+                      onClick={() => { setIsAddingModalOpen(false); setEditingMeal(null); }}
+                      className="w-1/2 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold rounded-2xl text-xs transition"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      type="submit"
+                      className="w-1/2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl text-xs transition shadow-md shadow-emerald-500/20"
+                    >
+                      儲存變更 🐾
+                    </button>
                   </div>
                 </form>
               </div>
             </div>
           )}
 
+          {/* 設定 Modal */}
           {isSettingsOpen && (
             <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white border-2 border-amber-200 rounded-3xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="flex justify-between items-center mb-4 border-b border-amber-100 pb-2">
-                  <h3 className="text-base font-black text-amber-950 flex items-center gap-1.5"><span>⚙️</span><span>貓貓個人目標與系統設定</span></h3>
+                  <h3 className="text-base font-black text-amber-950 flex items-center gap-1.5">
+                    <span>⚙️</span>
+                    <span>貓貓個人目標與系統設定</span>
+                  </h3>
                   <button onClick={() => setIsSettingsOpen(false)} className="text-amber-700 hover:text-amber-900 font-bold text-lg">✕</button>
                 </div>
+
                 <form onSubmit={handleSaveSettings} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-900 mb-1">自訂 Gemini API Key (選填)</label>
+                    <input 
+                      type="password" 
+                      placeholder="未填寫時使用系統預設 Key 喵"
+                      value={customApiKey}
+                      onChange={e => setCustomApiKey(e.target.value)}
+                      className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:border-emerald-500"
+                    />
+                    <p className="text-[10px] text-amber-700 mt-1 font-medium">可在 Google AI Studio 免費申請專屬金鑰喔！</p>
+                  </div>
+
                   <div className="border-t border-amber-100 pt-3">
-                    <h4 className="text-xs font-black text-emerald-600 mb-2.5 flex items-center gap-1"><span>🐾</span> 每日目標設定</h4>
+                    <h4 className="text-xs font-black text-emerald-600 mb-2.5 flex items-center gap-1">
+                      <span>🐾</span> 每日目標設定
+                    </h4>
+                    
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-bold text-amber-900 mb-1">每日熱量目標 (kcal)</label>
-                        <input type="number" min="500" max="10000" value={goal.calories}
+                        <input 
+                          type="number" 
+                          min="500" 
+                          max="10000"
+                          value={goal.calories}
                           onChange={e => setGoal({...goal, calories: safeNum(e.target.value, 2000)})}
-                          className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm font-bold text-slate-800" />
+                          className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-3 py-2 text-sm font-bold text-slate-800"
+                        />
                       </div>
+
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block text-[10px] font-bold text-amber-800 mb-1">蛋白質 (g)</label>
-                          <input type="number" value={goal.protein} onChange={e => setGoal({...goal, protein: safeNum(e.target.value, 120)})}
-                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800" />
+                          <input 
+                            type="number" 
+                            value={goal.protein}
+                            onChange={e => setGoal({...goal, protein: safeNum(e.target.value, 120)})}
+                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800"
+                          />
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-amber-800 mb-1">碳水化合物 (g)</label>
-                          <input type="number" value={goal.carbs} onChange={e => setGoal({...goal, carbs: safeNum(e.target.value, 225)})}
-                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800" />
+                          <input 
+                            type="number" 
+                            value={goal.carbs}
+                            onChange={e => setGoal({...goal, carbs: safeNum(e.target.value, 225)})}
+                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800"
+                          />
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-amber-800 mb-1">脂肪 (g)</label>
-                          <input type="number" value={goal.fat} onChange={e => setGoal({...goal, fat: safeNum(e.target.value, 65)})}
-                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800" />
+                          <input 
+                            type="number" 
+                            value={goal.fat}
+                            onChange={e => setGoal({...goal, fat: safeNum(e.target.value, 65)})}
+                            className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800"
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="border-t border-amber-100 pt-3">
-                    <h4 className="text-xs font-black text-rose-600 mb-2 flex items-center gap-1"><span>🔑</span> API Key 重設</h4>
-                    <p className="text-[11px] text-slate-500 mb-2">如果輸入錯誤或更換了 API Key，點擊下方可重置。</p>
-                    <button type="button" onClick={handleResetKey} className="w-full py-2 bg-rose-50 text-rose-600 font-bold rounded-xl text-xs border border-rose-200 hover:bg-rose-100">清除並重設 Gemini API Key 🐾</button>
-                  </div>
+
                   <div className="pt-3 flex space-x-3">
-                    <button type="button" onClick={() => setIsSettingsOpen(false)} className="w-1/2 py-2.5 bg-amber-100 text-amber-900 font-extrabold rounded-2xl text-xs">取消</button>
-                    <button type="submit" className="w-1/2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl text-xs shadow-md">儲存設定 🐾</button>
+                    <button 
+                      type="button"
+                      onClick={() => setIsSettingsOpen(false)}
+                      className="w-1/2 py-2.5 bg-amber-100 text-amber-900 font-extrabold rounded-2xl text-xs"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      type="submit"
+                      className="w-1/2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl text-xs transition shadow-md"
+                    >
+                      儲存設定 🐾
+                    </button>
                   </div>
                 </form>
               </div>
             </div>
           )}
+
         </div>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<ErrorBoundary><App /></ErrorBoundary>);
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
